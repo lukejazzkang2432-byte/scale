@@ -265,9 +265,15 @@ textarea.inp{min-height:80px}
 .notice b{display:block;font-weight:800;margin-bottom:3px}
 .warnbox{background:#FFE0E5;border:2.5px solid var(--ink);border-radius:var(--r-md);
   padding:13px;font-size:.8em;font-weight:600;line-height:1.65;margin-bottom:14px}
-.attbtn{width:78px;flex:none;border-left:2.5px solid var(--ink);background:var(--soft);
-  font-size:.72em;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
-.attbtn span{font-size:1.5em;line-height:1}
+.evcard{display:flex;align-items:stretch;background:var(--card);border:2.5px solid var(--ink);
+  border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden}
+.evmain{flex:1;min-width:0;text-align:left;padding:15px}
+.evmain .hd{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap}
+.evmain .hd b{font-weight:800;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evmain .sub{font-size:.76em;color:var(--gray);font-weight:600}
+.attbtn{width:74px;flex:none;border-left:2.5px solid var(--ink);background:var(--soft);
+  font-size:.7em;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.attbtn span{font-size:1.45em;line-height:1}
 .attbtn.on{background:var(--yellow)}
 .upbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 14px);z-index:90;
   background:var(--deep);color:#fff;border:2.5px solid var(--ink);border-radius:999px;
@@ -376,7 +382,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v6 · 출석·임시정산';
+const APPVER='v8 · 출석 양방향';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -811,15 +817,14 @@ function viewHome(){
     const r=Object.values(e.rsvp||{}).filter(v=>v==='yes').length;
     const at=Object.keys(e.attend||{}).length;
     const meAt=!!(e.attend||{})[ME.id];
-    return `<div class="card" style="padding:0">
-      <div style="display:flex;align-items:stretch">
-        <button style="flex:1;min-width:0;text-align:left;padding:15px" data-act="ev" data-id="${e.id}">
-          <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
-          <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
-          <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
-        <button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
-          <span>${meAt?'✅':'✋'}</span>출석</button>
-      </div></div>`;}).join('')
+    return `<div class="evcard">
+      <button class="evmain" data-act="ev" data-id="${e.id}">
+        <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)||'제목 없음'}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
+        <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
+        <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
+      <button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
+        <span>${meAt?'✅':'✋'}</span>출석</button>
+    </div>`;}).join('')
    :'<div class="empty">등록된 일정이 없어요</div>'}`;
 }
 function paintCal(){
@@ -916,7 +921,11 @@ function syncAttToRec(e){
   members().forEach(m=>{
     let p=rec.people.find(x=>x.id===m.id);
     if(!p){p={id:m.id,name:m.name,attend:false,paid:false};rec.people.push(p);}
-    if(at[m.id])p.attend=true;
+    if(at[m.id]){                       // 출석 → 참석
+      p.attend=true;p.byAtt=true;
+    }else if(p.byAtt&&!p.paid){         // 출석 취소 → 참석 해제
+      p.attend=false;p.byAtt=false;      // 단, 이미 입금한 사람은 건드리지 않음
+    }
   });
 }
 
@@ -1530,7 +1539,7 @@ function partyForm(){
   <div class="f"><div class="lblrow"><label>입금</label>${allBtns('party')}</div>
     <div class="plist"><div class="pl-head"><span>이름</span><span class="a">참석</span><span class="b">입금</span></div>
     ${d.people.length?d.people.map(p=>`<div class="prow ${p.attend?'':'off'}">
-      <div class="nm">${esc(p.name)}</div>
+      <div class="nm">${esc(p.name)}${p.byAtt?'<em>출석 체크로 자동 반영</em>':''}</div>
       <button class="tg ${p.attend?'att':'abs'}" data-act="pAtt" data-id="${p.id}">${p.attend?'참석':'불참'}</button>
       <button class="tg ${p.paid?'done':'undone'}" data-act="pPaid" data-id="${p.id}" ${p.attend?'':'disabled'}>${p.paid?'완료':'미완료'}</button>
     </div>`).join(''):`<div class="empty" style="border:none;margin:0">참여자 명단이 비어 있어요</div>`}</div></div>
@@ -1853,7 +1862,7 @@ document.addEventListener('click',async e=>{
     if(e.attend[ME.id])delete e.attend[ME.id];else e.attend[ME.id]=Date.now();
     if(e.type==='party')syncAttToRec(e);
     saveDB();attSheet(e);renderQuiet();
-    toast(e.attend[ME.id]?'출석 처리했어요':'출석을 취소했어요');return;}
+    toast(e.attend[ME.id]?'출석 처리했어요':'출석을 취소했어요'+(e.type==='party'?' · 정산부에서도 빠졌어요':''));return;}
   if(a==='attTog'){if(!gW())return;
     const e=DB.events.find(x=>x.id===b.dataset.id),mid=b.dataset.mid;
     e.attend=e.attend||{};
@@ -1872,7 +1881,7 @@ document.addEventListener('click',async e=>{
       date:e.start,place:e.place||e.title||'',time:e.time||'',total:0,support:0,
       unit:DB.roundUnit,receipt:'',author:ME.name,savedAt:Date.now(),
       remind:{on:true,every:6,from:'10:00',to:'22:00',days:5},
-      people:members().map(m=>({id:m.id,name:m.name,attend:!!at[m.id],paid:false}))};
+      people:members().map(m=>({id:m.id,name:m.name,attend:!!at[m.id],byAtt:!!at[m.id],paid:false}))};
     DB.records.push(rec);saveDB();close_(true);TAB='ledger';render();
     toast('정산부를 만들었어요. 금액은 나중에 적어도 돼요');return;}
   if(a==='rsvp'){const ev=DB.events.find(x=>x.id===b.dataset.id);
@@ -2039,7 +2048,7 @@ document.addEventListener('click',async e=>{
     return r.kind==='party'?sheetParty(r):r.kind==='income'?sheetIncome(r):sheetExpense(r);}
   if(a==='remOn'){pullParty();DRAFT.remind=DRAFT.remind||{every:6,from:'10:00',to:'22:00',days:5};
     DRAFT.remind.on=!DRAFT.remind.on;return refresh(partyForm);}
-  if(a==='pAtt'){const p=DRAFT.people.find(x=>x.id===b.dataset.id);p.attend=!p.attend;if(!p.attend)p.paid=false;return refresh(partyForm);}
+  if(a==='pAtt'){const p=DRAFT.people.find(x=>x.id===b.dataset.id);p.attend=!p.attend;p.byAtt=false;if(!p.attend)p.paid=false;return refresh(partyForm);}
   if(a==='pPaid'){const p=DRAFT.people.find(x=>x.id===b.dataset.id);p.paid=!p.paid;return refresh(partyForm);}
   if(a==='allSet'){
     const on=b.dataset.v==='1',k=b.dataset.kind;
@@ -2066,7 +2075,7 @@ document.addEventListener('click',async e=>{
     saveDB();recDetail(r);renderQuiet();toast('공지했어요');return;}
   if(a==='dAtt'||a==='dPaid'){if(!gW())return;
     const r=DB.records.find(x=>x.id===DRAFT.id),p=r.people.find(x=>x.id===b.dataset.id);
-    if(a==='dAtt'){p.attend=!p.attend;if(!p.attend)p.paid=false;}
+    if(a==='dAtt'){p.attend=!p.attend;p.byAtt=false;if(!p.attend)p.paid=false;}
     else{p.paid=!p.paid;
       if(p.paid){const c=partyCalc(r);
         notify([p.id],'입금 확인 완료',`${dl(r.date)} ${r.place} 회비 ${won(c.per)}원이 확인됐어요. 감사합니다!`,'paid');}}
