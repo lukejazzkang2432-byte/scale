@@ -263,6 +263,12 @@ textarea.inp{min-height:80px}
   background:var(--deep);color:var(--yellow);border-radius:var(--r-md);padding:13px;text-align:center;word-break:break-all;font-size:.86em}
 .notice{background:var(--yellow);border:2.5px solid var(--ink);border-radius:var(--r-lg);padding:14px;margin-bottom:12px}
 .notice b{display:block;font-weight:800;margin-bottom:3px}
+.warnbox{background:#FFE0E5;border:2.5px solid var(--ink);border-radius:var(--r-md);
+  padding:13px;font-size:.8em;font-weight:600;line-height:1.65;margin-bottom:14px}
+.attbtn{width:78px;flex:none;border-left:2.5px solid var(--ink);background:var(--soft);
+  font-size:.72em;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.attbtn span{font-size:1.5em;line-height:1}
+.attbtn.on{background:var(--yellow)}
 .upbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 14px);z-index:90;
   background:var(--deep);color:#fff;border:2.5px solid var(--ink);border-radius:999px;
   padding:9px 9px 9px 18px;display:flex;align-items:center;gap:12px;font-size:.82em;font-weight:700;
@@ -380,6 +386,14 @@ const esc=s=>String(s??'').replace(/[<>&"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&am
 const uid=()=>Math.random().toString(36).slice(2,8);
 const rnd=n=>Array.from({length:n},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
 const won=n=>Math.round(n||0).toLocaleString('ko-KR');
+function wonM(n){
+  if(canWrite())return won(n);
+  const v=DB.balanceView||'full';
+  if(v==='full')return won(n);
+  if(v==='hidden')return '***';
+  const s=won(Math.round(n||0));
+  return s[0]+s.slice(1).replace(/[0-9]/g,'*');
+}
 const num=v=>+String(v??'').replace(/[^0-9]/g,'')||0;
 const ceilTo=(n,u)=>u>1?Math.ceil(n/u)*u:Math.ceil(n);
 const WD='일월화수목금토';
@@ -405,7 +419,7 @@ const DEF={
   name:'SCALE',roleNames:{...ROLE_DEF},
   members:[],invites:{},
   events:[],polls:[],posts:[],dms:[],notifs:[],
-  records:[],carry:{},roundUnit:100,account:{bank:'',number:'',holder:''},
+  records:[],carry:{},roundUnit:100,account:{bank:'',number:'',holder:''},balanceView:'full',
   categories:['식비','물품 구매','대관료','행사비','간식/다과','교통비','인쇄/제작','기타'],
   push:{post:true,rsvp:true,poll:true,dm:true,paid:true}
 };
@@ -794,10 +808,17 @@ function viewHome(){
   <div class="sec-title">앞으로의 일정</div>
   ${DB.events.length?DB.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(e=>{
     const r=Object.values(e.rsvp||{}).filter(v=>v==='yes').length;
-    return `<button class="card" data-act="ev" data-id="${e.id}">
-      <div class="hd"><b>${esc(e.title)}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
-      <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
-      <div class="sub" style="margin-top:5px">참석 ${r}명 · 응답 마감 ${dleft(e.rsvpDue)}</div></button>`;}).join('')
+    const at=Object.keys(e.attend||{}).length;
+    const meAt=!!(e.attend||{})[ME.id];
+    return `<div class="card" style="padding:0">
+      <div style="display:flex;align-items:stretch">
+        <button style="flex:1;min-width:0;text-align:left;padding:15px" data-act="ev" data-id="${e.id}">
+          <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
+          <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
+          <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
+        <button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
+          <span>${meAt?'✅':'✋'}</span>출석</button>
+      </div></div>`;}).join('')
    :'<div class="empty">등록된 일정이 없어요</div>'}`;
 }
 function paintCal(){
@@ -857,6 +878,48 @@ function evSheet(e){
       <button class="btn ghost small" data-act="editEv" data-id="${e.id}">수정하기</button></div>`:''}`);
 }
 
+/* ── 출석 ── */
+function linkedRec(e){return DB.records.find(r=>r.eventId===e.id&&r.kind==='party');}
+function attSheet(e){
+  const list=members(), at=e.attend||{};
+  const on=list.filter(m=>at[m.id]), off=list.filter(m=>!at[m.id]);
+  const meAt=!!at[ME.id];
+  const rec=e.type==='party'?linkedRec(e):null;
+  open_(e.title+' · 출석',`
+  <div class="notice"><b>${dl(e.start)}${e.time?' '+e.time:''}</b>${e.place?'📍 '+esc(e.place):''}</div>
+  <button class="btn ${meAt?'ghost':''}" data-act="attMe" data-id="${e.id}">
+    ${meAt?'✅ 출석 완료 · 취소하기':'✋ 출석하기'}</button>
+  <div class="mini" style="margin-top:8px">${meAt?'출석 처리됐어요.':'모임에 왔다면 눌러주세요.'}
+    ${e.type==='party'?'<br>뒤풀이 출석은 정산부 참석자에 자동 반영됩니다.':''}</div>
+
+  ${e.type==='party'?(rec
+    ? `<div class="sec-title">연결된 정산부</div>
+       <button class="btn ghost small" data-act="open" data-id="${rec.id}">🧾 ${esc(rec.place||'작성 중인 정산부')} 열기</button>
+       ${!rec.published?'<div class="mini" style="margin-top:6px">아직 공지 전이에요. 금액을 다 적고 공지하면 학회원에게 알림이 갑니다.</div>':''}`
+    : (canWrite()?`<div class="sec-title">정산부</div>
+       <button class="btn small" data-act="mkLedger" data-id="${e.id}">＋ 이 뒤풀이 정산부 만들기</button>
+       <div class="mini" style="margin-top:6px">지금 출석한 사람이 참석자로 들어갑니다. 금액은 나중에 적어도 돼요.</div>`:'')):''}
+
+  <div class="sec-title">출석 ${on.length}명 / 전체 ${list.length}명</div>
+  <div class="bar"><i style="width:${list.length?Math.round(on.length/list.length*100):0}%"></i></div>
+  <div class="plist sc" style="margin-top:10px">
+    ${list.map(m=>`<div class="prow ${at[m.id]?'':'off'}">
+      <div class="nm">${esc(m.name)}${at[m.id]?`<em>${new Date(at[m.id]).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} 출석</em>`:'<em>미출석</em>'}</div>
+      ${canWrite()?`<button class="tg ${at[m.id]?'att':'abs'}" data-act="attTog" data-id="${e.id}" data-mid="${m.id}">${at[m.id]?'출석':'미출석'}</button>`
+      :`<span class="tagline ${at[m.id]?'t-live':'t-end'}">${at[m.id]?'출석':'미출석'}</span>`}
+    </div>`).join('')||'<div class="empty" style="border:none;margin:0">참여자가 없어요</div>'}</div>
+  ${canWrite()&&off.length?`<button class="btn ghost small" style="margin-top:12px" data-act="attCopy" data-id="${e.id}">미출석자 명단 복사</button>`:''}`);
+}
+function syncAttToRec(e){
+  const rec=linkedRec(e);if(!rec)return;
+  const at=e.attend||{};
+  members().forEach(m=>{
+    let p=rec.people.find(x=>x.id===m.id);
+    if(!p){p={id:m.id,name:m.name,attend:false,paid:false};rec.people.push(p);}
+    if(at[m.id])p.attend=true;
+  });
+}
+
 /* ── 장부 탭 ── */
 function viewLedger(){
   const b=balance(),bd=outBreakdown(),owe=unpaidByPerson(),totalOut=b.out+b.sup;
@@ -874,11 +937,11 @@ function viewLedger(){
   <div class="wallet">
     <div class="coin">${semLabel(CUR)}</div>
     <div class="lbl">지금 남은 학회비</div>
-    <div class="amt">${won(b.bal)}<small>원</small></div>
+    <div class="amt">${wonM(b.bal)}<small>원</small></div>
     <div class="wgrid">
-      <div><span>이월금</span><b>${won(b.carry)}</b></div>
-      <div><span>들어온 돈</span><b>+${won(b.inc)}</b></div>
-      <button class="${PIE?'open':''}" data-act="pie"><span>나간 돈 ${PIE?'▾':'▸'}</span><b>-${won(totalOut)}</b></button>
+      <div><span>이월금</span><b>${wonM(b.carry)}</b></div>
+      <div><span>들어온 돈</span><b>+${wonM(b.inc)}</b></div>
+      <button class="${PIE?'open':''}" data-act="pie"><span>나간 돈 ${PIE?'▾':'▸'}</span><b>-${wonM(totalOut)}</b></button>
     </div>${pieHTML}</div>
   ${owe.length?`<div class="owe"><div class="owe-h">🔔 아직 안 낸 사람<span class="n">${owe.length}명</span></div>
     ${owe.map(o=>`<div class="owe-l"><b>${esc(o.name)}</b>
@@ -918,18 +981,19 @@ function rowHTML(r){
     const sum=(r.entries||[]).reduce((s,e)=>s+(+e.amount||0),0);
     return `<button class="row" data-act="open" data-id="${r.id}">
       <div class="m"><b>${esc(r.source||'입금')}</b><span>${dl(r.date)} · ${(r.entries||[]).length}명${byTag(r)}</span></div>
-      <div class="v plus2">+${won(sum)}</div></button>`;}
+      <div class="v plus2">+${wonM(sum)}</div></button>`;}
   if(r.kind==='expense'){
     const tag=r.payer==='card'?`<span class="tagline t-live">학회카드</span>`
       :(r.reimbursed?`<span class="tagline t-done">청구완료</span>`:`<span class="tagline t-red">청구 전</span>`);
     return `<button class="row" data-act="open" data-id="${r.id}">
       <div class="m"><b>${esc(r.place||r.category||'지출')}</b><span>${dl(r.date)} · ${esc(r.category||'')}${byTag(r)}</span></div>
-      <div style="text-align:right"><div class="v minus">-${won(r.amount)}</div><div style="margin-top:3px">${tag}</div></div></button>`;}
+      <div style="text-align:right"><div class="v minus">-${wonM(r.amount)}</div><div style="margin-top:3px">${tag}</div></div></button>`;}
   const c=partyCalc(r);
   return `<button class="row" data-act="open" data-id="${r.id}">
     <div class="donut" style="background:conic-gradient(${c.pct===100?'var(--green)':'var(--yellow)'} ${c.pct}%, #EFEBF5 0)"><i>${c.pct}%</i></div>
-    <div class="m"><b>${esc(r.place||'뒤풀이')}</b><span>${dl(r.date)} · ${c.n}명 · 인당 ${won(c.per)}원${byTag(r)}</span></div>
-    <div class="v">${won(r.total)}</div></button>`;
+    <div class="m"><b>${r.published===false?'✏️ ':''}${esc(r.place||'작성 중인 정산')}</b><span>${dl(r.date)} · ${c.n}명 · 인당 ${won(c.per)}원${byTag(r)}</span></div>
+    <div style="text-align:right"><div class="v">${won(r.total)}</div>
+    ${r.published===false?'<div style="margin-top:3px"><span class="tagline t-red">미공지</span></div>':''}</div></button>`;
 }
 
 /* ── 투표·설문 탭 ── */
@@ -1317,6 +1381,12 @@ function settingsSheet(){
   <div class="f"><label>학회 이름</label><input class="inp" id="setName" value="${esc(DB.name)}"></div>
   <div class="f"><label>${semLabel(CUR)} 이월금</label><input class="inp" id="setCarry" inputmode="numeric" value="${DB.carry[CUR]||0}">
     <div class="hint">지난 학기에서 넘어온 금액이에요.</div></div>
+  <div class="f"><label>학회비 금액 공개 범위</label>
+    <select class="inp" id="setBV">
+      <option value="full" ${(DB.balanceView||'full')==='full'?'selected':''}>전체 공개</option>
+      <option value="partial" ${DB.balanceView==='partial'?'selected':''}>앞자리만 (1,***,***)</option>
+      <option value="hidden" ${DB.balanceView==='hidden'?'selected':''}>숨김 (***)</option>
+    </select><div class="hint">${ROLE.member} 화면에만 적용돼요. 운영진 이상은 항상 전체가 보입니다.</div></div>
   <div class="f"><label>인당 금액 올림 단위</label>
     <select class="inp" id="setUnit">${[1,10,100].map(u=>`<option value="${u}" ${DB.roundUnit===u?'selected':''}>${u===1?'1원 (딱 떨어지게)':won(u)+'원 단위'}</option>`).join('')}</select></div>
   <button class="btn" data-act="saveSettings">저장하기</button>`);
@@ -1334,8 +1404,22 @@ function roleNameSheet(){
 }
 function memberSheet(){
   const on=allMembers().filter(m=>!m.blocked),off=allMembers().filter(m=>m.blocked);
+  const cnt={};allMembers().forEach(m=>cnt[m.name]=(cnt[m.name]||0)+1);
+  const dups=Object.keys(cnt).filter(n=>cnt[n]>1);
+  const info=m=>{
+    const bits=[ROLE[m.role]||ROLE.member];
+    if(!m.app)bits.push('앱 미사용');
+    else if(!m.token)bits.push('알림 미설정');
+    if(m.tokenAt)bits.push(new Date(m.tokenAt).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 접속');
+    if(isOwner()&&m.app)bits.push(recovery(m.id));
+    return bits.join(' · ');
+  };
   open_('참여자 명단',`
   <div class="mini" style="margin-bottom:12px">초대코드로 들어온 사람은 자동으로 올라가요. 앱을 안 쓰는 학회원은 아래에서 직접 추가하시면 정산에 넣을 수 있습니다.</div>
+  ${dups.length?`<div class="warnbox">⚠️ <b>같은 이름이 두 번 있어요</b><br>
+    ${dups.map(n=>esc(n)).join(', ')}<br><br>
+    코드를 두 번 발급했을 때 생겨요. 아래 목록에서 <b>‘앱 미사용’이거나 접속 기록이 없는 쪽</b>을 중지 → 영구삭제 하시면 됩니다.
+    ${isOwner()?'<br>헷갈리면 본인에게 물어보고, 지금 쓰는 기기의 복구 코드를 확인하세요.':''}</div>`:''}
   ${canManage()?`<div class="f"><div class="two" style="grid-template-columns:1fr auto">
     <input class="inp" id="mName" placeholder="이름 (앱 미사용자)">
     <button class="btn small" style="width:auto;padding:11px 18px" data-act="mAdd">추가</button></div></div>`:''}
@@ -1425,7 +1509,7 @@ const allBtns=k=>`<div class="sp">
   <button class="chipbtn n" data-act="allSet" data-kind="${k}" data-v="0">모두 불참</button></div>`;
 function sheetParty(rec){
   DRAFT=rec?structuredClone(rec):{id:uid(),kind:'party',date:iso(new Date()),place:'',time:'',total:0,support:0,
-    unit:DB.roundUnit,receipt:'',author:ME.name,
+    unit:DB.roundUnit,receipt:'',author:ME.name,published:false,
     remind:{on:true,every:6,from:'10:00',to:'22:00',days:5},
     people:members().map(m=>({id:m.id,name:m.name,attend:true,paid:false}))};
   if(rec){const h=new Set(DRAFT.people.map(p=>p.id));
@@ -1585,6 +1669,8 @@ function recDetail(r){
       ${acctCard(c.per)}
       <div class="mini" style="margin-top:7px">입금 완료로 바꾸면 그 사람에게 확인 알림이 갑니다.</div>
       ${r.receipt?`<img class="thumb" src="${r.receipt}" alt="영수증">`:''}${byLine(r)}
+      ${r.published===false&&canWrite()?`<button class="btn" style="margin-top:16px" data-act="publishParty" data-id="${r.id}">📢 정산 공지하기</button>
+        <div class="mini" style="margin-top:6px">아직 학회원에게 알림이 가지 않았어요. 금액을 다 적은 뒤 눌러주세요.</div>`:''}
       <div class="btnrow" style="margin-top:16px">
         <button class="btn ghost small" data-act="copyUnpaid" data-id="${r.id}">미입금 안내 복사</button>
         <button class="btn ghost small" data-act="png" data-id="${r.id}">사진으로 저장</button></div>
@@ -1695,7 +1781,7 @@ function upsert(){
   const i=DB.records.findIndex(r=>r.id===DRAFT.id);
   const isNew=i<0;
   if(i>=0)DB.records[i]=DRAFT;else DB.records.push(DRAFT);
-  if(isNew&&DRAFT.kind==='party'){
+  if(isNew&&DRAFT.kind==='party'&&DRAFT.published!==false){
     const c=partyCalc(DRAFT);
     const ids=(DRAFT.people||[]).filter(p=>p.attend&&!p.paid).map(p=>p.id);
     const ac=acctText();
@@ -1760,6 +1846,34 @@ document.addEventListener('click',async e=>{
   if(a==='next'){CM++;if(CM>12){CM=1;CY++;}paintCal();return;}
   if(a==='calDay')return showDay(+b.dataset.d);
   if(a==='ev'){close_();const ev=DB.events.find(x=>x.id===b.dataset.id);if(ev)evSheet(ev);return;}
+  if(a==='att'){close_();const e=DB.events.find(x=>x.id===b.dataset.id);if(e)attSheet(e);return;}
+  if(a==='attMe'){const e=DB.events.find(x=>x.id===b.dataset.id);
+    e.attend=e.attend||{};
+    if(e.attend[ME.id])delete e.attend[ME.id];else e.attend[ME.id]=Date.now();
+    if(e.type==='party')syncAttToRec(e);
+    saveDB();attSheet(e);renderQuiet();
+    toast(e.attend[ME.id]?'출석 처리했어요':'출석을 취소했어요');return;}
+  if(a==='attTog'){if(!gW())return;
+    const e=DB.events.find(x=>x.id===b.dataset.id),mid=b.dataset.mid;
+    e.attend=e.attend||{};
+    if(e.attend[mid])delete e.attend[mid];else e.attend[mid]=Date.now();
+    if(e.type==='party')syncAttToRec(e);
+    saveDB();attSheet(e);renderQuiet();return;}
+  if(a==='attCopy'){const e=DB.events.find(x=>x.id===b.dataset.id);
+    const no=members().filter(m=>!(e.attend||{})[m.id]).map(m=>m.name);
+    if(!no.length)return toast('전원 출석했어요 🎉');
+    return copy(`[${e.title}] 미출석 ${no.length}명\n${no.join(', ')}`);}
+  if(a==='mkLedger'){if(!gW())return;
+    const e=DB.events.find(x=>x.id===b.dataset.id);
+    if(linkedRec(e))return toast('이미 정산부가 있어요');
+    const at=e.attend||{};
+    const rec={id:uid(),kind:'party',eventId:e.id,published:false,
+      date:e.start,place:e.place||e.title||'',time:e.time||'',total:0,support:0,
+      unit:DB.roundUnit,receipt:'',author:ME.name,savedAt:Date.now(),
+      remind:{on:true,every:6,from:'10:00',to:'22:00',days:5},
+      people:members().map(m=>({id:m.id,name:m.name,attend:!!at[m.id],paid:false}))};
+    DB.records.push(rec);saveDB();close_(true);TAB='ledger';render();
+    toast('정산부를 만들었어요. 금액은 나중에 적어도 돼요');return;}
   if(a==='rsvp'){const ev=DB.events.find(x=>x.id===b.dataset.id);
     ev.rsvp=ev.rsvp||{};ev.rsvp[ME.id]=b.dataset.v;saveDB();close_(true);render();
     toast({yes:'참석으로 응답했어요',maybe:'미정으로 응답했어요',no:'불참으로 응답했어요'}[b.dataset.v]);return;}
@@ -1767,8 +1881,12 @@ document.addEventListener('click',async e=>{
     if(!gW())return;
     const ex=a==='editEv'?DB.events.find(x=>x.id===b.dataset.id):null;
     close_();
-    const d=ex||{id:uid(),title:'',start:iso(new Date()),end:iso(new Date()),time:'',place:'',desc:'',rsvpDue:iso(new Date()),required:false,rsvp:{}};
+    const d=ex||{id:uid(),type:'meeting',title:'',start:iso(new Date()),end:iso(new Date()),time:'',place:'',desc:'',rsvpDue:iso(new Date()),required:false,rsvp:{},attend:{}};
     open_(ex?'일정 수정':'일정 만들기',`
+      <div class="f"><label>일정 종류</label><select class="inp" data-e="type">
+        <option value="meeting" ${d.type!=='party'?'selected':''}>정기모임 · 행사</option>
+        <option value="party" ${d.type==='party'?'selected':''}>뒤풀이 (정산 연동)</option></select>
+        <div class="hint">뒤풀이로 만들면 출석한 사람이 정산부에 자동으로 참석 처리돼요.</div></div>
       <div class="f"><label>일정 이름</label><input class="inp" data-e="title" value="${esc(d.title)}"></div>
       <div class="two"><div class="f"><label>시작</label><input class="inp" type="date" data-e="start" value="${d.start}"></div>
       <div class="f"><label>종료</label><input class="inp" type="date" data-e="end" value="${d.end}"></div></div>
@@ -1789,7 +1907,7 @@ document.addEventListener('click',async e=>{
     if(g.end<g.start)g.end=g.start;
     const i=DB.events.findIndex(x=>x.id===b.dataset.id);
     if(i>=0)DB.events[i]={...DB.events[i],...g};
-    else{DB.events.push({id:b.dataset.id,...g,rsvp:{}});
+    else{DB.events.push({id:b.dataset.id,...g,rsvp:{},attend:{}});
       notify(null,'새 일정 · '+g.title,`${dl(g.start)}${g.time?' '+g.time:''} ${g.place||''}`,'rsvp');}
     saveDB();close_(true);render();toast('저장했어요');return;}
   if(a==='delEvent'){if(!await ask('이 일정을 지울까요?','되돌릴 수 없어요.','삭제'))return;
@@ -1931,11 +2049,20 @@ document.addEventListener('click',async e=>{
     else{const ids=new Set(members().map(m=>m.id));DRAFT.entries=DRAFT.entries.filter(x=>!ids.has(x.key));}
     return refresh(incomeForm);}
   if(a==='savePartyRec'){pullParty();
-    if(!DRAFT.place)return toast('장소를 입력해주세요');
-    if(!DRAFT.total)return toast('총 금액을 입력해주세요');
-    if(DRAFT.support>DRAFT.total)return toast('지원금이 총 금액보다 커요');
-    if(!DRAFT.people.some(p=>p.attend))return toast('참석자가 없어요');
+    if(DRAFT.support>DRAFT.total&&DRAFT.total)return toast('지원금이 총 금액보다 커요');
     DRAFT.unit=DB.roundUnit;return upsert();}
+  if(a==='publishParty'){
+    const r=DB.records.find(x=>x.id===b.dataset.id);if(!r)return;
+    if(!r.place)return toast('장소를 먼저 입력해주세요');
+    if(!r.total)return toast('총 금액을 먼저 입력해주세요');
+    if(!r.people.some(p=>p.attend))return toast('참석자가 한 명도 없어요');
+    if(!await ask('정산을 공지할까요?','참석자에게 인당 금액과 계좌가 푸시로 갑니다.','공지하기',false))return;
+    r.published=true;r.savedAt=Date.now();
+    const c=partyCalc(r),ac=acctText();
+    const ids=r.people.filter(p=>p.attend&&!p.paid).map(p=>p.id);
+    if(ids.length)notify(ids,`💸 ${r.place} 정산 안내`,
+      `인당 ${won(c.per)}원이에요.${ac?' 입금: '+ac:''}`,'paid');
+    saveDB();recDetail(r);renderQuiet();toast('공지했어요');return;}
   if(a==='dAtt'||a==='dPaid'){if(!gW())return;
     const r=DB.records.find(x=>x.id===DRAFT.id),p=r.people.find(x=>x.id===b.dataset.id);
     if(a==='dAtt'){p.attend=!p.attend;if(!p.attend)p.paid=false;}
@@ -2011,6 +2138,7 @@ document.addEventListener('click',async e=>{
       holder:document.getElementById('acHolder').value.trim()};
     DB.carry[CUR]=num(document.getElementById('setCarry').value);
     DB.roundUnit=+document.getElementById('setUnit').value;
+    DB.balanceView=document.getElementById('setBV').value;
     saveDB();close_(true);render();toast('저장했어요');return;}
   if(a==='roleNames'){if(!gO())return;return roleNameSheet();}
   if(a==='saveRoleNames'){const n={};
@@ -2021,6 +2149,9 @@ document.addEventListener('click',async e=>{
     if(!FB.db&&!await cloudInit())return;
     const who=await askText('초대코드 발급','누구에게 줄 코드인가요?');
     if(who===undefined||who===null)return;
+    if(who&&DB.members.some(m=>m.name===who.trim())){
+      if(!await ask('이미 명단에 있는 이름이에요',`<b>${esc(who)}</b> 님은 이미 등록돼 있어요.<br>새 코드를 쓰면 명단에 두 번 뜹니다.<br><br>기기를 바꾼 경우라면 <b>복구 코드</b>를 알려주는 게 맞아요.`,'그래도 발급',false))return;
+    }
     try{const code=await makeInvite(who||'학회원');
       open_('초대코드 발급 완료',`<div class="mini" style="margin-bottom:12px">${esc(who||'학회원')} 님에게 전달하세요. 한 번만 쓸 수 있어요.</div>
         <div class="code" style="font-size:1.4em">${code}</div>
