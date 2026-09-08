@@ -376,6 +376,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
+const APPVER='v6 · 출석·임시정산';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -863,14 +864,13 @@ function evSheet(e){
     <div class="notice"><b>${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' '+e.time:''}</b>${e.place?'📍 '+esc(e.place):''}</div>
     ${e.desc?`<div class="mini" style="margin-bottom:16px;white-space:pre-line">${esc(e.desc)}</div>`:''}
     <div class="f"><label>참석하시나요? · 응답 마감 ${dleft(e.rsvpDue)}</label>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
-        ${[['yes','참석','var(--yellow)'],['maybe','미정','var(--pink)'],['no','불참','#FFE0E5']].map(([v,t,c])=>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
+        ${[['yes','참석','var(--yellow)'],['no','불참','#FFE0E5']].map(([v,t,c])=>
           `<button class="opt" style="justify-content:center;margin:0;${my===v?'background:'+c:''}" data-act="rsvp" data-id="${e.id}" data-v="${v}">${t}</button>`).join('')}
       </div></div>
     <div class="sec-title">응답 현황</div>
     <div class="plist">
       <div class="prow"><div class="nm">참석</div><b>${cnt('yes')}명</b></div>
-      <div class="prow"><div class="nm">미정</div><b>${cnt('maybe')}명</b></div>
       <div class="prow"><div class="nm">불참</div><b>${cnt('no')}명</b></div>
       <div class="prow"><div class="nm" style="color:var(--red)">미응답</div><b>${Math.max(0,tot-Object.keys(e.rsvp||{}).length)}명</b></div></div>
     ${canWrite()?`<div class="btnrow" style="margin-top:14px">
@@ -1328,7 +1328,8 @@ function viewMe(){
   return `<div class="card" style="background:var(--deep);color:#fff">
     <div style="font-size:.78em;opacity:.8;font-weight:700">${ROLE[R()]||ROLE.member}</div>
     <div style="font-size:1.4em;font-weight:800;margin:2px 0 10px">${esc(ME.name)}</div>
-    <div class="sub" style="color:rgba(255,255,255,.8)">${semLabel(CUR)} · ${esc(DB.name)}</div></div>
+    <div class="sub" style="color:rgba(255,255,255,.8)">${semLabel(CUR)} · ${esc(DB.name)}</div>
+    <div class="sub" style="color:rgba(255,255,255,.55);margin-top:6px;font-size:.72em">앱 버전 ${APPVER}</div></div>
   <div class="sec-title">내 활동</div>
   <div class="plist">
     <div class="prow"><div class="nm">참석 응답한 일정</div><b>${DB.events.filter(e=>(e.rsvp||{})[ME.id]).length}건</b></div>
@@ -1876,7 +1877,7 @@ document.addEventListener('click',async e=>{
     toast('정산부를 만들었어요. 금액은 나중에 적어도 돼요');return;}
   if(a==='rsvp'){const ev=DB.events.find(x=>x.id===b.dataset.id);
     ev.rsvp=ev.rsvp||{};ev.rsvp[ME.id]=b.dataset.v;saveDB();close_(true);render();
-    toast({yes:'참석으로 응답했어요',maybe:'미정으로 응답했어요',no:'불참으로 응답했어요'}[b.dataset.v]);return;}
+    toast(b.dataset.v==='yes'?'참석으로 응답했어요':'불참으로 응답했어요');return;}
   if(a==='newEvent'||a==='editEv'){
     if(!gW())return;
     const ex=a==='editEv'?DB.events.find(x=>x.id===b.dataset.id):null;
