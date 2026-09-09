@@ -383,7 +383,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v10 · 출석/응답 구분';
+const APPVER='v11 · 출석 숨김 정리';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -837,9 +837,7 @@ function viewHome(){
         <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
         <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
       ${attOpen(e)?`<button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
-        <span>${meAt?'✅':'✋'}</span>출석</button>`
-      :(canWrite()?`<button class="attbtn off" data-act="att" data-id="${e.id}">
-        <span>📋</span>현황</button>`:'')}
+        <span>${meAt?'✅':'✋'}</span>출석</button>`:''}
     </div>`;}).join('')
    :'<div class="empty">등록된 일정이 없어요</div>'}`;
 }
@@ -892,12 +890,18 @@ function evSheet(e){
       </div>`}
       <div class="hint">미리 인원을 파악하려는 조사예요. 실제 출석 체크는 아래에서 합니다.</div></div>
 
-    <div class="f"><label>✋ 당일 출석</label>
+    ${e.att==='off'
+      ? (canWrite()?`<div class="f"><label>✋ 당일 출석</label>
+          <div class="empty" style="margin:0">이 일정은 출석을 쓰지 않아요</div>
+          <div class="btnrow" style="margin-top:8px">
+            <button class="btn ghost small" data-act="attMode" data-id="${e.id}" data-v="auto">출석 켜기</button>
+            <button class="btn ghost small" data-act="att" data-id="${e.id}">📋 현황 보기</button></div></div>`:'')
+      : `<div class="f"><label>✋ 당일 출석</label>
       ${attOpen(e)?`<button class="btn ${(e.attend||{})[ME.id]?'ghost':''}" data-act="att" data-id="${e.id}">
         ${(e.attend||{})[ME.id]?'✅ 출석 완료 · 출석 화면 열기':'✋ 출석 체크하러 가기'}</button>`
-      :`<div class="empty" style="margin:0">출석 기간이 아니에요${canWrite()?' · 출석 화면에서 열 수 있어요':''}</div>
-        ${canWrite()?`<button class="btn ghost small" style="margin-top:8px" data-act="att" data-id="${e.id}">📋 출석 현황 보기</button>`:''}`}
-      <div class="hint">현재 출석 ${Object.keys(e.attend||{}).length}명</div></div>
+      :`<div class="empty" style="margin:0">출석 기간이 끝났어요</div>
+        ${canWrite()?`<button class="btn ghost small" style="margin-top:8px" data-act="att" data-id="${e.id}">📋 출석 현황 보기 · 다시 열기</button>`:''}`}
+      <div class="hint">현재 출석 ${Object.keys(e.attend||{}).length}명</div></div>`}
 
     <div class="sec-title">사전 조사 현황</div>
     <div class="plist">
@@ -934,10 +938,10 @@ function attSheet(e){
     ${[['auto','자동'],['on','열기'],['off','닫기']].map(([v,t])=>
       `<button class="chipbtn ${(e.att||'auto')===v?'y':''}" data-act="attMode" data-id="${e.id}" data-v="${v}">${t}</button>`).join('')}
   </div></div>
-  <div class="mini" style="margin-bottom:14px">지금 상태: <b>${attWhy(e)}</b>${(e.att||'auto')==='auto'?' · 일정 당일부터 다음날 새벽 6시까지 열려요':''}</div>`:''}
+  <div class="mini" style="margin-bottom:14px">지금 상태: <b>${attWhy(e)}</b>${(e.att||'auto')==='auto'?' · 일정 당일부터 다음날 새벽 6시까지 열려요':e.att==='off'?' · 일정 목록에서 출석 버튼이 사라져요':''}</div>`:''}
   ${attOpen(e)?`<button class="btn ${meAt?'ghost':''}" data-act="attMe" data-id="${e.id}">
     ${meAt?'✅ 출석 완료 · 취소하기':'✋ 출석하기'}</button>`
-  :`<div class="empty">출석 기간이 아니에요.${canWrite()?'<br>위에서 “열기”를 누르면 다시 받을 수 있어요.':''}</div>`}
+  :`<div class="empty">${e.att==='off'?'출석을 쓰지 않는 일정이에요.':'출석 기간이 아니에요.'}${canWrite()?'<br>위에서 “열기”를 누르면 다시 받을 수 있어요.':''}</div>`}
   <div class="mini" style="margin-top:8px">${meAt?'출석 처리됐어요.':'모임에 왔다면 눌러주세요.'}
     ${e.type==='party'?'<br>뒤풀이 출석은 정산부 참석자에 자동 반영됩니다.':''}</div>
 
