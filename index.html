@@ -383,7 +383,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v11 · 출석 숨김 정리';
+const APPVER='v12 · 출석 단일화';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -794,8 +794,8 @@ function todos(){
   DB.polls.filter(p=>!isEnded(p)&&!didPoll(p)&&forMe(p)).forEach(p=>out.push({
     t:p.title,s:(p.kind==='vote'?'투표':'설문')+' · '+leftLabel(p),
     go:p.kind==='vote'?'참여하기':'응답하기',act:'poll',id:p.id}));
-  DB.events.filter(e=>!ended(e.rsvpDue)&&!e.rsvp[ME.id]).forEach(e=>out.push({
-    t:e.title,s:'참석 응답 · '+dleft(e.rsvpDue),go:'응답하기',act:'ev',id:e.id}));
+  DB.events.filter(e=>attOpen(e)&&!(e.attend||{})[ME.id]).forEach(e=>out.push({
+    t:e.title,s:'출석 체크 · 오늘',go:'출석하기',act:'att',id:e.id}));
   const owe=unpaidByPerson().find(o=>o.name===ME.name);
   if(owe)out.push({t:'뒤풀이 회비 미납',s:`${owe.n}건 · ${won(owe.total)}원`,go:'확인',act:'goLedger',id:''});
   return out;
@@ -828,14 +828,13 @@ function viewHome(){
       <div class="sub">${isEnded(p)?'마감됨':leftLabel(p)}</div></button>`).join('')}`:''}
   <div class="sec-title">앞으로의 일정</div>
   ${DB.events.length?DB.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(e=>{
-    const r=Object.values(e.rsvp||{}).filter(v=>v==='yes').length;
     const at=Object.keys(e.attend||{}).length;
     const meAt=!!(e.attend||{})[ME.id];
     return `<div class="evcard">
       <button class="evmain" data-act="ev" data-id="${e.id}">
         <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)||'제목 없음'}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
         <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
-        <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
+        <div class="sub" style="margin-top:5px">출석 ${at}명 / ${members().length}명</div></button>
       ${attOpen(e)?`<button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
         <span>${meAt?'✅':'✋'}</span>출석</button>`:''}
     </div>`;}).join('')
@@ -877,19 +876,10 @@ function showDay(d){
     :`<div class="empty">이 날은 기록이 없어요</div>`);
 }
 function evSheet(e){
-  const my=(e.rsvp||{})[ME.id]||'',cnt=v=>Object.values(e.rsvp||{}).filter(x=>x===v).length;
   const tot=members().length;
   open_(e.title,`
     <div class="notice"><b>${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' '+e.time:''}</b>${e.place?'📍 '+esc(e.place):''}</div>
     ${e.desc?`<div class="mini" style="margin-bottom:16px;white-space:pre-line">${esc(e.desc)}</div>`:''}
-    <div class="f"><label>📝 사전 참석 조사 · 마감 ${dleft(e.rsvpDue)}</label>
-      ${ended(e.rsvpDue)?`<div class="empty" style="margin:0">응답 기간이 끝났어요${my?` · 내 응답: ${my==='yes'?'참석':'불참'}`:''}</div>`
-      :`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
-        ${[['yes','참석 예정','var(--yellow)'],['no','불참','#FFE0E5']].map(([v,t,c])=>
-          `<button class="opt" style="justify-content:center;margin:0;${my===v?'background:'+c:''}" data-act="rsvp" data-id="${e.id}" data-v="${v}">${t}</button>`).join('')}
-      </div>`}
-      <div class="hint">미리 인원을 파악하려는 조사예요. 실제 출석 체크는 아래에서 합니다.</div></div>
-
     ${e.att==='off'
       ? (canWrite()?`<div class="f"><label>✋ 당일 출석</label>
           <div class="empty" style="margin:0">이 일정은 출석을 쓰지 않아요</div>
@@ -903,13 +893,12 @@ function evSheet(e){
         ${canWrite()?`<button class="btn ghost small" style="margin-top:8px" data-act="att" data-id="${e.id}">📋 출석 현황 보기 · 다시 열기</button>`:''}`}
       <div class="hint">현재 출석 ${Object.keys(e.attend||{}).length}명</div></div>`}
 
-    <div class="sec-title">사전 조사 현황</div>
+    <div class="sec-title">출석 현황</div>
     <div class="plist">
-      <div class="prow"><div class="nm">참석</div><b>${cnt('yes')}명</b></div>
-      <div class="prow"><div class="nm">불참</div><b>${cnt('no')}명</b></div>
-      <div class="prow"><div class="nm" style="color:var(--red)">미응답</div><b>${Math.max(0,tot-Object.keys(e.rsvp||{}).length)}명</b></div></div>
+      <div class="prow"><div class="nm">출석</div><b>${Object.keys(e.attend||{}).length}명</b></div>
+      <div class="prow"><div class="nm" style="color:var(--gray)">미출석</div><b>${Math.max(0,tot-Object.keys(e.attend||{}).length)}명</b></div></div>
     ${canWrite()?`<div class="btnrow" style="margin-top:14px">
-      <button class="btn ghost small" data-act="remindEv" data-id="${e.id}">🔔 미응답자 알림</button>
+      <button class="btn ghost small" data-act="remindEv" data-id="${e.id}">🔔 미출석자 알림</button>
       <button class="btn ghost small" data-act="editEv" data-id="${e.id}">수정하기</button></div>`:''}`);
 }
 
@@ -1389,14 +1378,14 @@ function viewMe(){
     <div class="sub" style="color:rgba(255,255,255,.55);margin-top:6px;font-size:.72em">앱 버전 ${APPVER}</div></div>
   <div class="sec-title">내 활동</div>
   <div class="plist">
-    <div class="prow"><div class="nm">참석 응답한 일정</div><b>${DB.events.filter(e=>(e.rsvp||{})[ME.id]).length}건</b></div>
+    <div class="prow"><div class="nm">출석한 일정</div><b>${DB.events.filter(e=>(e.attend||{})[ME.id]).length}건</b></div>
     <div class="prow"><div class="nm">참여한 투표·설문</div><b>${DB.polls.filter(didPoll).length}건</b></div>
     <div class="prow"><div class="nm">뒤풀이 미납</div><b style="color:${owe?'var(--red)':'inherit'}">${owe?won(owe.total)+'원':'없음'}</b></div>
     <div class="prow"><div class="nm">남은 할 일</div><b>${todos().length}건</b></div></div>
   <div class="sec-title">푸시 알림</div>
   <div class="plist">
     ${row('post','새 공지','올라오면 바로 + 예약 시각')}
-    ${row('rsvp','일정 참석 응답 요청','마감 하루 전')}
+    ${row('rsvp','일정 · 출석 알림','새 일정과 출석 요청')}
     ${row('poll','투표·설문 마감 알림','정한 시점마다')}
     ${row('dm','개인 알림','나에게 직접 온 알림')}
     ${row('paid','정산·입금 알림','새 정산 안내와 입금 확인')}</div>
@@ -1948,9 +1937,6 @@ document.addEventListener('click',async e=>{
       people:members().map(m=>({id:m.id,name:m.name,attend:!!at[m.id],byAtt:!!at[m.id],paid:false}))};
     DB.records.push(rec);saveDB();close_(true);TAB='ledger';render();
     toast('정산부를 만들었어요. 금액은 나중에 적어도 돼요');return;}
-  if(a==='rsvp'){const ev=DB.events.find(x=>x.id===b.dataset.id);
-    ev.rsvp=ev.rsvp||{};ev.rsvp[ME.id]=b.dataset.v;saveDB();close_(true);render();
-    toast(b.dataset.v==='yes'?'참석으로 응답했어요':'불참으로 응답했어요');return;}
   if(a==='newEvent'||a==='editEv'){
     if(!gW())return;
     const ex=a==='editEv'?DB.events.find(x=>x.id===b.dataset.id):null;
@@ -1971,10 +1957,9 @@ document.addEventListener('click',async e=>{
         <option value="auto" ${(d.att||'auto')==='auto'?'selected':''}>자동 (당일 ~ 다음날 새벽 6시)</option>
         <option value="on" ${d.att==='on'?'selected':''}>항상 열어두기</option>
         <option value="off" ${d.att==='off'?'selected':''}>쓰지 않기</option></select></div>
-      <div class="two"><div class="f"><label>참석 응답 마감</label><input class="inp" type="date" data-e="rsvpDue" value="${d.rsvpDue}"></div>
       <div class="f"><label>필참 여부</label><select class="inp" data-e="required">
         <option value="0" ${!d.required?'selected':''}>자유 참석</option>
-        <option value="1" ${d.required?'selected':''}>필참</option></select></div></div>
+        <option value="1" ${d.required?'selected':''}>필참</option></select></div>
       <button class="btn" data-act="saveEvent" data-id="${d.id}">${ex?'수정 저장':'만들고 알림 보내기'}</button>
       ${ex?`<button class="btn warn small" style="margin-top:9px" data-act="delEvent" data-id="${d.id}">삭제</button>`:''}`);
     return;}
@@ -1991,9 +1976,9 @@ document.addEventListener('click',async e=>{
   if(a==='delEvent'){if(!await ask('이 일정을 지울까요?','되돌릴 수 없어요.','삭제'))return;
     DB.events=DB.events.filter(x=>x.id!==b.dataset.id);saveDB();close_(true);render();toast('삭제했어요');return;}
   if(a==='remindEv'){const ev=DB.events.find(x=>x.id===b.dataset.id);
-    const no=members().filter(m=>!(ev.rsvp||{})[m.id]).map(m=>m.id);
-    if(!no.length)return toast('모두 응답했어요 🎉');
-    notify(no,'참석 여부를 알려주세요',`${ev.title} · 응답 마감 ${dleft(ev.rsvpDue)}`,'rsvp');
+    const no=members().filter(m=>!(ev.attend||{})[m.id]).map(m=>m.id);
+    if(!no.length)return toast('전원 출석했어요 🎉');
+    notify(no,'출석 체크를 해주세요',`${ev.title} · 앱에서 출석 버튼을 눌러주세요`,'rsvp');
     saveDB();render();toast(`${no.length}명에게 알림을 보냈어요`);return;}
 
   /* 투표 */
