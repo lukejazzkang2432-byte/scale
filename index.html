@@ -383,7 +383,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v9 · 출석기간·금액표기';
+const APPVER='v10 · 출석/응답 구분';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -884,12 +884,22 @@ function evSheet(e){
   open_(e.title,`
     <div class="notice"><b>${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' '+e.time:''}</b>${e.place?'📍 '+esc(e.place):''}</div>
     ${e.desc?`<div class="mini" style="margin-bottom:16px;white-space:pre-line">${esc(e.desc)}</div>`:''}
-    <div class="f"><label>참석하시나요? · 응답 마감 ${dleft(e.rsvpDue)}</label>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
-        ${[['yes','참석','var(--yellow)'],['no','불참','#FFE0E5']].map(([v,t,c])=>
+    <div class="f"><label>📝 사전 참석 조사 · 마감 ${dleft(e.rsvpDue)}</label>
+      ${ended(e.rsvpDue)?`<div class="empty" style="margin:0">응답 기간이 끝났어요${my?` · 내 응답: ${my==='yes'?'참석':'불참'}`:''}</div>`
+      :`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
+        ${[['yes','참석 예정','var(--yellow)'],['no','불참','#FFE0E5']].map(([v,t,c])=>
           `<button class="opt" style="justify-content:center;margin:0;${my===v?'background:'+c:''}" data-act="rsvp" data-id="${e.id}" data-v="${v}">${t}</button>`).join('')}
-      </div></div>
-    <div class="sec-title">응답 현황</div>
+      </div>`}
+      <div class="hint">미리 인원을 파악하려는 조사예요. 실제 출석 체크는 아래에서 합니다.</div></div>
+
+    <div class="f"><label>✋ 당일 출석</label>
+      ${attOpen(e)?`<button class="btn ${(e.attend||{})[ME.id]?'ghost':''}" data-act="att" data-id="${e.id}">
+        ${(e.attend||{})[ME.id]?'✅ 출석 완료 · 출석 화면 열기':'✋ 출석 체크하러 가기'}</button>`
+      :`<div class="empty" style="margin:0">출석 기간이 아니에요${canWrite()?' · 출석 화면에서 열 수 있어요':''}</div>
+        ${canWrite()?`<button class="btn ghost small" style="margin-top:8px" data-act="att" data-id="${e.id}">📋 출석 현황 보기</button>`:''}`}
+      <div class="hint">현재 출석 ${Object.keys(e.attend||{}).length}명</div></div>
+
+    <div class="sec-title">사전 조사 현황</div>
     <div class="plist">
       <div class="prow"><div class="nm">참석</div><b>${cnt('yes')}명</b></div>
       <div class="prow"><div class="nm">불참</div><b>${cnt('no')}명</b></div>
@@ -1413,6 +1423,14 @@ function pushState(){
   if(m?.token)return '✅ 이 기기에서 알림을 받고 있어요.';
   return '아직 안 켜져 있어요. 아이폰은 홈 화면에 추가한 뒤에만 받을 수 있습니다.';
 }
+function bvSample(v){
+  const n=balance().bal;
+  if(v==='full')return won(n)+'원';
+  if(v==='hidden')return '***원';
+  if(v==='round')return roughWon(n)+'원';
+  const s=won(Math.round(n||0));
+  return s[0]+s.slice(1).replace(/[0-9]/g,'*')+'원';
+}
 function settingsSheet(){
   const ac=DB.account||{bank:'',number:'',holder:''};
   open_('장부 설정',`
@@ -1431,7 +1449,11 @@ function settingsSheet(){
       <option value="round" ${DB.balanceView==='round'?'selected':''}>대략만 (약 60만)</option>
       <option value="partial" ${DB.balanceView==='partial'?'selected':''}>앞자리만 (1,***,***)</option>
       <option value="hidden" ${DB.balanceView==='hidden'?'selected':''}>숨김 (***)</option>
-    </select><div class="hint">${ROLE.member} 화면에만 적용돼요. 운영진 이상은 항상 전체가 보입니다.</div></div>
+    </select>
+    <div class="calc" style="margin-top:9px;margin-bottom:0">
+      <div class="l"><span>실제 잔액</span><b>${won(balance().bal)}원</b></div>
+      <div class="l big"><span>${ROLE.member}에게 보이는 모습</span><b id="bvPrev">${bvSample(DB.balanceView||'full')}</b></div></div>
+    <div class="hint">${ROLE.member} 화면에만 적용돼요. 운영진 이상은 항상 전체가 보입니다.</div></div>
   <div class="f"><label>인당 금액 올림 단위</label>
     <select class="inp" id="setUnit">${[1,10,100].map(u=>`<option value="${u}" ${DB.roundUnit===u?'selected':''}>${u===1?'1원 (딱 떨어지게)':won(u)+'원 단위'}</option>`).join('')}</select></div>
   <button class="btn" data-act="saveSettings">저장하기</button>`);
@@ -2266,6 +2288,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
   const t=e.target;
+  if(t.id==='setBV'){const el=document.getElementById('bvPrev');if(el)el.textContent=bvSample(t.value);return;}
   if(t.dataset.act==='photo'){
     const f=t.files[0];if(!f||!DRAFT)return;
     const rd=new FileReader();
