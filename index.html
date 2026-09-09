@@ -275,6 +275,7 @@ textarea.inp{min-height:80px}
   font-size:.7em;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .attbtn span{font-size:1.45em;line-height:1}
 .attbtn.on{background:var(--yellow)}
+.attbtn.off{background:var(--line);color:var(--gray)}
 .upbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 14px);z-index:90;
   background:var(--deep);color:#fff;border:2.5px solid var(--ink);border-radius:999px;
   padding:9px 9px 9px 18px;display:flex;align-items:center;gap:12px;font-size:.82em;font-weight:700;
@@ -382,7 +383,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v8 · 출석 양방향';
+const APPVER='v9 · 출석기간·금액표기';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -398,8 +399,21 @@ function wonM(n){
   const v=DB.balanceView||'full';
   if(v==='full')return won(n);
   if(v==='hidden')return '***';
+  if(v==='round')return roughWon(n);
   const s=won(Math.round(n||0));
   return s[0]+s.slice(1).replace(/[0-9]/g,'*');
+}
+function roughWon(n){
+  const a=Math.abs(Math.round(n||0));
+  if(a<10000)return '1만 미만';
+  const man=a/10000;
+  let v;
+  if(man>=1000)      v=Math.round(man/100)*100;
+  else if(man>=100)  v=Math.round(man/10)*10;
+  else if(man>=10)   v=Math.round(man/5)*5;
+  else               v=Math.round(man);
+  if(v>=10000)return '약 '+(v/10000)+'억';
+  return '약 '+v.toLocaleString('ko-KR')+'만';
 }
 const num=v=>+String(v??'').replace(/[^0-9]/g,'')||0;
 const ceilTo=(n,u)=>u>1?Math.ceil(n/u)*u:Math.ceil(n);
@@ -822,8 +836,10 @@ function viewHome(){
         <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)||'제목 없음'}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
         <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
         <div class="sub" style="margin-top:5px">참석응답 ${r}명 · 출석 ${at}명</div></button>
-      <button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
-        <span>${meAt?'✅':'✋'}</span>출석</button>
+      ${attOpen(e)?`<button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
+        <span>${meAt?'✅':'✋'}</span>출석</button>`
+      :(canWrite()?`<button class="attbtn off" data-act="att" data-id="${e.id}">
+        <span>📋</span>현황</button>`:'')}
     </div>`;}).join('')
    :'<div class="empty">등록된 일정이 없어요</div>'}`;
 }
@@ -885,6 +901,18 @@ function evSheet(e){
 
 /* ── 출석 ── */
 function linkedRec(e){return DB.records.find(r=>r.eventId===e.id&&r.kind==='party');}
+function attAuto(e){
+  const s=new Date(e.start+'T00:00:00').getTime();
+  const t=new Date((e.end||e.start)+'T00:00:00').getTime()+30*3600*1000;
+  const n=Date.now();
+  return n>=s&&n<=t;
+}
+function attOpen(e){
+  if(e.att==='on')return true;
+  if(e.att==='off')return false;
+  return attAuto(e);
+}
+const attWhy=e=>e.att==='on'?'항상 열림':e.att==='off'?'닫힘':(attAuto(e)?'자동 · 오늘 열림':'자동 · 기간 지남');
 function attSheet(e){
   const list=members(), at=e.attend||{};
   const on=list.filter(m=>at[m.id]), off=list.filter(m=>!at[m.id]);
@@ -892,8 +920,14 @@ function attSheet(e){
   const rec=e.type==='party'?linkedRec(e):null;
   open_(e.title+' · 출석',`
   <div class="notice"><b>${dl(e.start)}${e.time?' '+e.time:''}</b>${e.place?'📍 '+esc(e.place):''}</div>
-  <button class="btn ${meAt?'ghost':''}" data-act="attMe" data-id="${e.id}">
-    ${meAt?'✅ 출석 완료 · 취소하기':'✋ 출석하기'}</button>
+  ${canWrite()?`<div class="lblrow"><label>출석 버튼</label><div class="sp">
+    ${[['auto','자동'],['on','열기'],['off','닫기']].map(([v,t])=>
+      `<button class="chipbtn ${(e.att||'auto')===v?'y':''}" data-act="attMode" data-id="${e.id}" data-v="${v}">${t}</button>`).join('')}
+  </div></div>
+  <div class="mini" style="margin-bottom:14px">지금 상태: <b>${attWhy(e)}</b>${(e.att||'auto')==='auto'?' · 일정 당일부터 다음날 새벽 6시까지 열려요':''}</div>`:''}
+  ${attOpen(e)?`<button class="btn ${meAt?'ghost':''}" data-act="attMe" data-id="${e.id}">
+    ${meAt?'✅ 출석 완료 · 취소하기':'✋ 출석하기'}</button>`
+  :`<div class="empty">출석 기간이 아니에요.${canWrite()?'<br>위에서 “열기”를 누르면 다시 받을 수 있어요.':''}</div>`}
   <div class="mini" style="margin-top:8px">${meAt?'출석 처리됐어요.':'모임에 왔다면 눌러주세요.'}
     ${e.type==='party'?'<br>뒤풀이 출석은 정산부 참석자에 자동 반영됩니다.':''}</div>
 
@@ -1394,6 +1428,7 @@ function settingsSheet(){
   <div class="f"><label>학회비 금액 공개 범위</label>
     <select class="inp" id="setBV">
       <option value="full" ${(DB.balanceView||'full')==='full'?'selected':''}>전체 공개</option>
+      <option value="round" ${DB.balanceView==='round'?'selected':''}>대략만 (약 60만)</option>
       <option value="partial" ${DB.balanceView==='partial'?'selected':''}>앞자리만 (1,***,***)</option>
       <option value="hidden" ${DB.balanceView==='hidden'?'selected':''}>숨김 (***)</option>
     </select><div class="hint">${ROLE.member} 화면에만 적용돼요. 운영진 이상은 항상 전체가 보입니다.</div></div>
@@ -1857,6 +1892,9 @@ document.addEventListener('click',async e=>{
   if(a==='calDay')return showDay(+b.dataset.d);
   if(a==='ev'){close_();const ev=DB.events.find(x=>x.id===b.dataset.id);if(ev)evSheet(ev);return;}
   if(a==='att'){close_();const e=DB.events.find(x=>x.id===b.dataset.id);if(e)attSheet(e);return;}
+  if(a==='attMode'){if(!gW())return;const e=DB.events.find(x=>x.id===b.dataset.id);
+    e.att=b.dataset.v;saveDB();attSheet(e);renderQuiet();
+    toast(b.dataset.v==='on'?'출석을 열었어요':b.dataset.v==='off'?'출석을 닫았어요':'자동으로 바꿨어요');return;}
   if(a==='attMe'){const e=DB.events.find(x=>x.id===b.dataset.id);
     e.attend=e.attend||{};
     if(e.attend[ME.id])delete e.attend[ME.id];else e.attend[ME.id]=Date.now();
@@ -1903,6 +1941,10 @@ document.addEventListener('click',async e=>{
       <div class="two"><div class="f"><label>시간</label><input class="inp" data-e="time" value="${esc(d.time)}" placeholder="19:00"></div>
       <div class="f"><label>장소</label><input class="inp" data-e="place" value="${esc(d.place)}"></div></div>
       <div class="f"><label>안내 내용</label><textarea class="inp" data-e="desc">${esc(d.desc)}</textarea></div>
+      <div class="f"><label>출석 버튼</label><select class="inp" data-e="att">
+        <option value="auto" ${(d.att||'auto')==='auto'?'selected':''}>자동 (당일 ~ 다음날 새벽 6시)</option>
+        <option value="on" ${d.att==='on'?'selected':''}>항상 열어두기</option>
+        <option value="off" ${d.att==='off'?'selected':''}>쓰지 않기</option></select></div>
       <div class="two"><div class="f"><label>참석 응답 마감</label><input class="inp" type="date" data-e="rsvpDue" value="${d.rsvpDue}"></div>
       <div class="f"><label>필참 여부</label><select class="inp" data-e="required">
         <option value="0" ${!d.required?'selected':''}>자유 참석</option>
