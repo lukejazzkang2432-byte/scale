@@ -265,6 +265,10 @@ textarea.inp{min-height:80px}
 .notice b{display:block;font-weight:800;margin-bottom:3px}
 .warnbox{background:#FFE0E5;border:2.5px solid var(--ink);border-radius:var(--r-md);
   padding:13px;font-size:.8em;font-weight:600;line-height:1.65;margin-bottom:14px}
+.foldbtn{width:100%;padding:12px;border:2.5px dashed var(--line);border-radius:var(--r-md);
+  background:transparent;color:var(--gray);font-weight:800;font-size:.8em;margin-bottom:12px}
+.evcard.past{opacity:.6}
+.evcard.past .evmain b{color:var(--gray)}
 .evcard{display:flex;align-items:stretch;background:var(--card);border:2.5px solid var(--ink);
   border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden}
 .evmain{flex:1;min-width:0;text-align:left;padding:15px}
@@ -383,7 +387,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v13 · 출석 토글·결과보기';
+const APPVER='v14 · 지난 일정 접기';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -756,7 +760,7 @@ function splash(){
 }
 
 /* ═════ 렌더 ═════ */
-let TAB='home',CY=T.getFullYear(),CM=T.getMonth()+1,PIE=false,CHART='bar';
+let TAB='home',CY=T.getFullYear(),CM=T.getMonth()+1,PIE=false,CHART='bar',PAST=false;
 function render(){
   syncRoles();
   document.getElementById('brand').innerHTML=`<svg viewBox="0 0 100 100">
@@ -794,7 +798,7 @@ function todos(){
   DB.polls.filter(p=>!isEnded(p)&&!didPoll(p)&&forMe(p)).forEach(p=>out.push({
     t:p.title,s:(p.kind==='vote'?'투표':'설문')+' · '+leftLabel(p),
     go:p.kind==='vote'?'참여하기':'응답하기',act:'poll',id:p.id}));
-  DB.events.filter(e=>attOpen(e)&&!(e.attend||{})[ME.id]).forEach(e=>out.push({
+  DB.events.filter(e=>attOpen(e)&&isUpcoming(e)&&!(e.attend||{})[ME.id]).forEach(e=>out.push({
     t:e.title,s:'출석 체크 · 오늘',go:'출석하기',act:'att',id:e.id}));
   const owe=unpaidByPerson().find(o=>o.name===ME.name);
   if(owe)out.push({t:'뒤풀이 회비 미납',s:`${owe.n}건 · ${won(owe.total)}원`,go:'확인',act:'goLedger',id:''});
@@ -827,18 +831,30 @@ function viewHome(){
       <div class="hd"><b>🗳 ${esc(p.title)}</b><span class="tagline ${isUrgent(p)?'t-urg':'t-end'}">${dueLabel(p)}</span></div>
       <div class="sub">${isEnded(p)?'마감됨':leftLabel(p)}</div></button>`).join('')}`:''}
   <div class="sec-title">앞으로의 일정</div>
-  ${DB.events.length?DB.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(e=>{
-    const at=Object.keys(e.attend||{}).length;
-    const meAt=!!(e.attend||{})[ME.id];
-    return `<div class="evcard">
+  ${(()=>{const up=DB.events.filter(isUpcoming).sort((a,b)=>a.start.localeCompare(b.start));
+    return up.length?up.map(evCard).join(''):'<div class="empty">예정된 일정이 없어요</div>';})()}
+  ${(()=>{const pastList=DB.events.filter(e=>!isUpcoming(e)).sort((a,b)=>b.start.localeCompare(a.start));
+    if(!pastList.length)return '';
+    return `<button class="foldbtn" data-act="togglePast">지난 일정 ${pastList.length}건 ${PAST?'▲ 접기':'▼ 펼치기'}</button>
+      ${PAST?pastList.map(evCard).join(''):''}`;})()}`;
+}
+/* 오늘 이후(종료일 기준)면 예정 */
+function isUpcoming(e){
+  const end=new Date((e.end||e.start)+'T00:00:00').getTime()+24*3600*1000;
+  return end>=Date.now();
+}
+function evCard(e){
+  const at=Object.keys(e.attend||{}).length;
+  const meAt=!!(e.attend||{})[ME.id];
+  const past=!isUpcoming(e);
+  return `<div class="evcard ${past?'past':''}">
       <button class="evmain" data-act="ev" data-id="${e.id}">
         <div class="hd"><b>${e.type==='party'?'🍻 ':''}${esc(e.title)||'제목 없음'}</b>${e.required?'<span class="tagline t-new">필참</span>':''}</div>
         <div class="sub">${dl(e.start)}${e.end!==e.start?' ~ '+dl(e.end):''}${e.time?' · '+e.time:''}${e.place?' · '+esc(e.place):''}</div>
         <div class="sub" style="margin-top:5px">출석 ${at}명 / ${members().length}명</div></button>
-      ${attOpen(e)?`<button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
+      ${attOpen(e)&&!past?`<button class="attbtn ${meAt?'on':''}" data-act="att" data-id="${e.id}">
         <span>${meAt?'✅':'✋'}</span>출석</button>`:''}
-    </div>`;}).join('')
-   :'<div class="empty">등록된 일정이 없어요</div>'}`;
+    </div>`;
 }
 function paintCal(){
   const g=document.getElementById('calGrid');if(!g)return;
@@ -2106,6 +2122,7 @@ document.addEventListener('click',async e=>{
 
   /* 장부 */
   if(a==='pie'){PIE=!PIE;renderQuiet();return;}
+  if(a==='togglePast'){PAST=!PAST;renderQuiet();return;}
   if(a==='semester'){open_('학기 고르기',semList().map(k=>
     `<button class="btn ${k===CUR?'':'ghost'} small" style="margin-bottom:9px" data-act="pickSem" data-k="${k}">${semLabel(k)}${k===CUR?' · 보는 중':''}</button>`).join(''));return;}
   if(a==='pickSem'){close_();return setSem(b.dataset.k);}
