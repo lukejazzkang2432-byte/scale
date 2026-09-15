@@ -387,7 +387,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v14 · 지난 일정 접기';
+const APPVER='v15 · 지원금 연동·공개 토글';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -492,19 +492,31 @@ function partyCalc(r){
   return{n,net,per,paid,unpaid:n-paid,collected:per*paid,extra:per*n-net,pct:n?Math.round(paid/n*100):0};
 }
 function balance(){
-  let inc=0,out=0,sup=0;
+  let inc=0,out=0;
   recs().forEach(r=>{
     if(r.kind==='income')inc+=(r.entries||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    if(r.kind==='expense'&&(r.payer==='card'||r.reimbursed))out+=(+r.amount||0);
-    if(r.kind==='party')sup+=(+r.support||0);});
+    if(r.kind==='expense'&&(r.payer==='card'||r.reimbursed))out+=(+r.amount||0);});
   const carry=+DB.carry[CUR]||0;
-  return{carry,inc,out,sup,bal:carry+inc-out-sup};
+  return{carry,inc,out,sup:0,bal:carry+inc-out};
+}
+/* 뒤풀이 지원금은 출금 내역으로 자동 연동됩니다 */
+function syncSupport(r){
+  const id='sup_'+r.id;
+  const i=DB.records.findIndex(x=>x.id===id);
+  const amt=+r.support||0;
+  if(!amt){ if(i>=0)DB.records.splice(i,1); return; }
+  const rec={id,kind:'expense',auto:'party',partyId:r.id,
+    date:r.date,payer:'card',payerName:'',category:'뒤풀이 지원',
+    place:(r.place||'뒤풀이')+' 지원금',amount:amt,reimbursed:true,
+    memo:'뒤풀이 정산에서 자동으로 생성된 기록이에요.',receipt:'',
+    author:r.author||ME.name,savedAt:Date.now()};
+  if(i>=0)DB.records[i]={...DB.records[i],...rec};else DB.records.push(rec);
 }
 function outBreakdown(){
   const m={};
   recs().forEach(r=>{
     if(r.kind==='expense'&&(r.payer==='card'||r.reimbursed))m[r.category||'기타']=(m[r.category||'기타']||0)+(+r.amount||0);
-    if(r.kind==='party'&&+r.support>0)m['뒤풀이 지원']=(m['뒤풀이 지원']||0)+(+r.support||0);});
+  });
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
 }
 function unpaidByPerson(){
@@ -994,7 +1006,7 @@ function viewLedger(){
       <div><span>들어온 돈</span><b>+${wonM(b.inc)}</b></div>
       <button class="${PIE?'open':''}" data-act="pie"><span>나간 돈 ${PIE?'▾':'▸'}</span><b>-${wonM(totalOut)}</b></button>
     </div>${pieHTML}</div>
-  ${owe.length?`<div class="owe"><div class="owe-h">🔔 아직 안 낸 사람<span class="n">${owe.length}명</span></div>
+  ${canWrite()&&owe.length?`<div class="owe"><div class="owe-h">🔔 아직 안 낸 사람<span class="n">${owe.length}명</span></div>
     ${owe.map(o=>`<div class="owe-l"><b>${esc(o.name)}</b>
       <span class="c">${o.n>1?`뒤풀이 ${o.n}번`:esc(o.last)}</span>
       <span class="a">${won(o.total)}원</span></div>`).join('')}</div>`:''}
@@ -1014,7 +1026,7 @@ function donutSVG(bd,total){
 }
 function lblock(kind,ico,title,sub){
   const cls={party:'party',income:'in',expense:'out'}[kind];
-  const all=recs().filter(r=>r.kind===kind);
+  const all=recs().filter(r=>r.kind===kind&&(canWrite()||r.published!==false));
   const nowM=iso(new Date()).slice(0,7);
   const tgt=all.length?(all.some(r=>r.date.slice(0,7)===nowM)?nowM:all[0].date.slice(0,7)):'';
   const list=all.filter(r=>r.date.slice(0,7)===tgt);
@@ -1044,7 +1056,7 @@ function rowHTML(r){
     <div class="donut" style="background:conic-gradient(${c.pct===100?'var(--green)':'var(--yellow)'} ${c.pct}%, #EFEBF5 0)"><i>${c.pct}%</i></div>
     <div class="m"><b>${r.published===false?'✏️ ':''}${esc(r.place||'작성 중인 정산')}</b><span>${dl(r.date)} · ${c.n}명 · 인당 ${won(c.per)}원${byTag(r)}</span></div>
     <div style="text-align:right"><div class="v">${won(r.total)}</div>
-    ${r.published===false?'<div style="margin-top:3px"><span class="tagline t-red">미공지</span></div>':''}</div></button>`;
+    ${r.published===false?'<div style="margin-top:3px"><span class="tagline t-red">운영진만</span></div>':''}</div></button>`;
 }
 
 /* ── 투표·설문 탭 ── */
@@ -1758,8 +1770,13 @@ function recDetail(r){
       ${acctCard(c.per)}
       <div class="mini" style="margin-top:7px">입금 완료로 바꾸면 그 사람에게 확인 알림이 갑니다.</div>
       ${r.receipt?`<img class="thumb" src="${r.receipt}" alt="영수증">`:''}${byLine(r)}
-      ${r.published===false&&canWrite()?`<button class="btn" style="margin-top:16px" data-act="publishParty" data-id="${r.id}">📢 정산 공지하기</button>
-        <div class="mini" style="margin-top:6px">아직 학회원에게 알림이 가지 않았어요. 금액을 다 적은 뒤 눌러주세요.</div>`:''}
+      ${canWrite()?(r.published===false
+        ? `<button class="btn" style="margin-top:16px" data-act="publishParty" data-id="${r.id}">📢 정산 공지하기</button>
+           <div class="mini" style="margin-top:6px">지금은 <b>운영진에게만</b> 보여요. 금액을 다 적은 뒤 눌러주세요.</div>`
+        : `<div class="btnrow" style="margin-top:16px">
+             <button class="btn ghost small" data-act="hideParty" data-id="${r.id}">🙈 숨기기</button>
+             <button class="btn ghost small" data-act="publishParty" data-id="${r.id}" data-again="1">🔔 다시 알리기</button></div>
+           <div class="mini" style="margin-top:6px">학회원에게 공개된 상태예요.</div>`):''}
       <div class="btnrow" style="margin-top:16px">
         <button class="btn ghost small" data-act="copyUnpaid" data-id="${r.id}">미입금 안내 복사</button>
         <button class="btn ghost small" data-act="png" data-id="${r.id}">사진으로 저장</button></div>
@@ -1781,9 +1798,10 @@ function recDetail(r){
     ${r.payer==='personal'&&canWrite()?`<button class="btn ${r.reimbursed?'ghost':''} small" data-act="toggleReim" data-id="${r.id}">${r.reimbursed?'청구 완료 · 되돌리기':'청구 완료로 표시'}</button>`:''}
     ${r.receipt?`<img class="thumb" src="${r.receipt}" alt="영수증">`:''}
     ${r.memo?`<div class="mini" style="margin-top:10px">${esc(r.memo)}</div>`:''}${byLine(r)}
+    ${r.auto==='party'?`<button class="btn ghost small" style="margin-top:14px" data-act="open" data-id="${r.partyId}">🍻 연결된 뒤풀이 정산 열기</button>`:''}
     <div class="btnrow" style="margin-top:16px">
       <button class="btn ghost small" data-act="png" data-id="${r.id}">사진으로 저장</button>
-      ${canWrite()?`<button class="btn small" data-act="edit" data-id="${r.id}">수정하기</button>`:''}</div>`);
+      ${canWrite()&&r.auto!=='party'?`<button class="btn small" data-act="edit" data-id="${r.id}">수정하기</button>`:''}</div>`);
 }
 async function exportPNG(r){
   const cap=document.getElementById('capture');let rows='';
@@ -1870,6 +1888,7 @@ function upsert(){
   const i=DB.records.findIndex(r=>r.id===DRAFT.id);
   const isNew=i<0;
   if(i>=0)DB.records[i]=DRAFT;else DB.records.push(DRAFT);
+  if(DRAFT.kind==='party')syncSupport(DRAFT);
   if(isNew&&DRAFT.kind==='party'&&DRAFT.published!==false){
     const c=partyCalc(DRAFT);
     const ids=(DRAFT.people||[]).filter(p=>p.attend&&!p.paid).map(p=>p.id);
@@ -2134,7 +2153,9 @@ document.addEventListener('click',async e=>{
     open_({income:'입금 내역',expense:'출금 내역',party:'뒤풀이 내역'}[b.dataset.kind]+' · '+semLabel(CUR),
       `<div class="block"><div class="rows" style="max-height:none;border-top:none">${list.map(rowHTML).join('')||'<div class="empty">없어요</div>'}</div></div>`);return;}
   if(a==='open'){close_();const r=DB.records.find(x=>x.id===b.dataset.id);if(r)recDetail(r);return;}
-  if(a==='edit'){if(!gW())return;const r=DB.records.find(x=>x.id===b.dataset.id);close_();
+  if(a==='edit'){if(!gW())return;const r=DB.records.find(x=>x.id===b.dataset.id);
+    if(r?.auto==='party')return toast('뒤풀이 정산에서 지원금을 고치면 함께 바뀌어요');
+    close_();
     return r.kind==='party'?sheetParty(r):r.kind==='income'?sheetIncome(r):sheetExpense(r);}
   if(a==='remOn'){pullParty();DRAFT.remind=DRAFT.remind||{every:6,from:'10:00',to:'22:00',days:5};
     DRAFT.remind.on=!DRAFT.remind.on;return refresh(partyForm);}
@@ -2151,12 +2172,16 @@ document.addEventListener('click',async e=>{
   if(a==='savePartyRec'){pullParty();
     if(DRAFT.support>DRAFT.total&&DRAFT.total)return toast('지원금이 총 금액보다 커요');
     DRAFT.unit=DB.roundUnit;return upsert();}
+  if(a==='hideParty'){if(!gW())return;
+    const r=DB.records.find(x=>x.id===b.dataset.id);if(!r)return;
+    if(!await ask('이 정산을 숨길까요?','학회원 화면에서 보이지 않게 됩니다.<br>운영진은 계속 볼 수 있어요.','숨기기',false))return;
+    r.published=false;saveDB();recDetail(r);renderQuiet();toast('숨겼어요');return;}
   if(a==='publishParty'){
     const r=DB.records.find(x=>x.id===b.dataset.id);if(!r)return;
     if(!r.place)return toast('장소를 먼저 입력해주세요');
     if(!r.total)return toast('총 금액을 먼저 입력해주세요');
     if(!r.people.some(p=>p.attend))return toast('참석자가 한 명도 없어요');
-    if(!await ask('정산을 공지할까요?','참석자에게 인당 금액과 계좌가 푸시로 갑니다.','공지하기',false))return;
+    if(!await ask(b.dataset.again?'다시 알릴까요?':'정산을 공지할까요?','아직 입금 안 한 참석자에게 인당 금액과 계좌가 푸시로 갑니다.',b.dataset.again?'다시 알리기':'공지하기',false))return;
     r.published=true;r.savedAt=Date.now();
     const c=partyCalc(r),ac=acctText();
     const ids=r.people.filter(p=>p.attend&&!p.paid).map(p=>p.id);
@@ -2198,7 +2223,8 @@ document.addEventListener('click',async e=>{
     return upsert();}
   if(a==='del'){if(!gW())return;
     if(!await ask('이 기록을 지울까요?','되돌릴 수 없어요.','완전히 삭제'))return;
-    DB.records=DB.records.filter(r=>r.id!==b.dataset.id);saveDB();close_(true);render();toast('삭제했어요');return;}
+    DB.records=DB.records.filter(r=>r.id!==b.dataset.id&&r.partyId!==b.dataset.id);
+    saveDB();close_(true);render();toast('삭제했어요');return;}
   if(a==='copyUnpaid'){const r=DB.records.find(x=>x.id===b.dataset.id),c=partyCalc(r);
     const names=r.people.filter(p=>p.attend&&!p.paid).map(p=>p.name);
     if(!names.length)return toast('모두 입금했어요 🎉');
