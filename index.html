@@ -28,10 +28,37 @@ button{border:none;background:none;cursor:pointer;padding:0}
 input,select,textarea{outline:none}
 #app{max-width:520px;margin:0 auto;min-height:100dvh;background:var(--paper);
   box-shadow:0 0 60px rgba(39,0,63,.16);display:flex;flex-direction:column}
-#scroll{flex:1;overflow-y:auto;padding:0 var(--pad) calc(var(--tabh) + 26px)}
+#scroll{flex:1;overflow-y:auto;padding:0 var(--pad) calc(var(--tabh) + 42px)}
 
-#gate,#splash{position:fixed;inset:0;z-index:70;background:var(--paper);display:none;overflow-y:auto}
-#gate.on,#splash.on{display:block}
+#gate,#splash,#attgate{position:fixed;inset:0;z-index:70;background:var(--paper);display:none;overflow-y:auto}
+#gate.on,#splash.on,#attgate.on{display:block}
+#attgate{z-index:74;background:var(--deep)}
+#attgate .g-wrap{text-align:center}
+.agtop{font-size:.85em;font-weight:700;color:rgba(255,255,255,.65);margin-bottom:22px}
+.agicon{font-size:4em;line-height:1;margin-bottom:18px}
+.agtitle{font-size:2em;font-weight:800;letter-spacing:-.04em;color:#fff;line-height:1.25;margin-bottom:10px;
+  word-break:keep-all}
+.agmeta{font-size:.92em;font-weight:600;color:rgba(255,255,255,.7);margin-bottom:44px}
+.agbtn{width:100%;background:var(--yellow);color:var(--ink);border:3px solid var(--ink);
+  border-radius:var(--r-lg);padding:22px;font-size:1.15em;font-weight:800;letter-spacing:-.02em;
+  box-shadow:0 5px 0 var(--ink)}
+.agbtn:active{transform:translateY(5px);box-shadow:0 0 0 var(--ink)}
+.aglater{display:block;width:100%;margin-top:20px;padding:12px;font-size:.88em;font-weight:700;
+  color:rgba(255,255,255,.55)}
+.aglist{display:flex;flex-direction:column;gap:12px}
+.agcard{display:flex;align-items:center;gap:13px;background:rgba(255,255,255,.1);
+  border:2.5px solid rgba(255,255,255,.25);border-radius:var(--r-lg);padding:15px;text-align:left}
+.agci{font-size:1.9em;line-height:1;flex:none}
+.agcm{flex:1;min-width:0}
+.agcm b{display:block;font-size:1.02em;font-weight:800;color:#fff;letter-spacing:-.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agcm span{display:block;font-size:.76em;font-weight:600;color:rgba(255,255,255,.62);margin-top:3px}
+.agcb{flex:none;background:var(--yellow);color:var(--ink);border:2.5px solid var(--ink);
+  border-radius:999px;padding:11px 18px;font-size:.86em;font-weight:800;box-shadow:0 3px 0 var(--ink)}
+.agcb:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.agcb.okd{background:#18A472;color:#fff;display:inline-block}
+.agcard.okc{opacity:.55}
+.agfoot{font-size:.76em;font-weight:600;color:rgba(255,255,255,.45);margin-top:-8px}
 #splash{z-index:75;background:var(--deep)}
 .g-wrap{max-width:420px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
   padding:calc(env(safe-area-inset-top) + 40px) var(--pad) calc(env(safe-area-inset-bottom) + 40px)}
@@ -177,10 +204,22 @@ input,select,textarea{outline:none}
   border:2.5px dashed var(--line);border-radius:var(--r-lg);margin-bottom:12px}
 
 .tabbar{position:sticky;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);
-  background:var(--card);border-top:2.5px solid var(--ink);padding-bottom:env(safe-area-inset-bottom)}
-.tab{padding:9px 0 8px;text-align:center;font-size:.6em;font-weight:700;color:var(--gray)}
-.tab .ico{display:block;font-size:1.32em;line-height:1.15;filter:grayscale(1) opacity(.5)}
+  overflow:visible;background:var(--card);border-top:2.5px solid var(--ink);
+  padding-bottom:env(safe-area-inset-bottom)}
+.tab{position:relative;height:62px;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-end;gap:3px;padding:0 0 9px;text-align:center;
+  font-size:.6em;font-weight:700;color:var(--gray)}
+.tab .ico{display:flex;align-items:center;justify-content:center;height:21px;
+  font-size:1.32em;line-height:1;filter:grayscale(1) opacity(.5)}
 .tab.on{color:var(--deep)}.tab.on .ico{filter:none}
+/* 가운데 홈 — 탭바 위로 절반쯤 솟은 원 */
+.tab.mid{color:var(--deep)}
+.tab.mid .ico{position:absolute;left:50%;top:-30px;transform:translateX(-50%);
+  width:60px;height:60px;border-radius:50%;background:var(--deep);
+  border:2.5px solid var(--ink);box-shadow:0 5px 14px rgba(39,0,63,.32);
+  font-size:1.62em;filter:none;transition:background .15s,transform .12s}
+.tab.mid.on .ico{background:var(--yellow)}
+.tab.mid:active .ico{transform:translateX(-50%) scale(.93)}
 
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;display:none}
 .scrim.on{display:block}
@@ -280,7 +319,7 @@ textarea.inp{min-height:80px}
 .attbtn span{font-size:1.45em;line-height:1}
 .attbtn.on{background:var(--yellow)}
 .attbtn.off{background:var(--line);color:var(--gray)}
-.upbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 14px);z-index:90;
+.upbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 40px);z-index:90;
   background:var(--deep);color:#fff;border:2.5px solid var(--ink);border-radius:999px;
   padding:9px 9px 9px 18px;display:flex;align-items:center;gap:12px;font-size:.82em;font-weight:700;
   box-shadow:0 4px 0 var(--ink);max-width:92%}
@@ -303,7 +342,7 @@ textarea.inp{min-height:80px}
 .ask h3{margin:0 0 7px;font-size:1.02em;font-weight:800}
 .ask p{margin:0 0 16px;font-size:.83em;font-weight:600;color:var(--gray);line-height:1.55}
 #ascrim{z-index:60}
-.toast{position:fixed;left:50%;bottom:calc(var(--tabh) + 16px);transform:translateX(-50%);z-index:80;
+.toast{position:fixed;left:50%;bottom:calc(var(--tabh) + 40px);transform:translateX(-50%);z-index:80;
   background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:.83em;font-weight:700;
   opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center}
 .toast.on{opacity:1}
@@ -354,15 +393,16 @@ textarea.inp{min-height:80px}
   </div>
   <div id="scroll"></div>
   <nav class="tabbar">
-    <button class="tab on" data-tab="home"><span class="ico">📅</span>일정</button>
     <button class="tab" data-tab="poll"><span class="ico">🗳️</span>투표·설문</button>
     <button class="tab" data-tab="board"><span class="ico">📢</span>공지</button>
+    <button class="tab mid on" data-tab="home"><span class="ico">🏠</span>홈</button>
     <button class="tab" data-tab="ledger"><span class="ico">💰</span>장부</button>
     <button class="tab" data-tab="me"><span class="ico">👤</span>내 정보</button>
   </nav>
 </div>
 <div id="gate"></div>
 <div id="splash"></div>
+<div id="attgate"></div>
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet"><div class="grab"></div>
   <div class="sheet-head"><h2 id="sheetTitle"></h2><button class="x" data-act="close">✕</button></div>
@@ -387,7 +427,7 @@ const EMBED_CFG={
   appId:"1:52732836281:web:054742fbd7cadf41121e68"
 };
 const COL='clubs',ICOL='cinvites';
-const APPVER='v15 · 지원금 연동·공개 토글';
+const APPVER='v19 · 홈 탭 가운데 배치';
 const VAPID="BG_uqgvcYWnrzKtZJkbrRMlsGdh7ofRCBLBg4qJ1U_2KX5G4IhVPeTddbo6OyDu9jt2rYxizBVZ89-GyINgANHc";
 
 /* ═════ 공통 ═════ */
@@ -933,6 +973,59 @@ function evSheet(e){
 function linkedRec(e){return DB.records.find(r=>r.eventId===e.id&&r.kind==='party');}
 function attOpen(e){return e.att!=='off';}
 const attWhy=e=>attOpen(e)?'켜짐':'꺼짐';
+/* 앱 열자마자 뜨는 출석 화면 */
+const SKIPK='scale_attskip';
+function attSkipped(id){
+  try{const o=JSON.parse(localStorage.getItem(SKIPK)||'{}');return o[id]===iso(new Date());}catch(_){return false;}
+}
+function skipAtt(id){
+  try{const o=JSON.parse(localStorage.getItem(SKIPK)||'{}');o[id]=iso(new Date());
+    localStorage.setItem(SKIPK,JSON.stringify(o));}catch(_){}
+}
+/* 이미 시작했고 아직 안 끝난 일정만 (미래 일정은 안 띄움) */
+/* 지금 출석 대상인 일정 — 시간 순 (이미 출석한 것도 포함) */
+function todayAtt(){
+  const today=iso(new Date());
+  return DB.events.filter(e=>attOpen(e)&&isUpcoming(e)&&e.start<=today&&!attSkipped(e.id))
+    .sort((a,b)=>(a.start+' '+(a.time||'99:99')).localeCompare(b.start+' '+(b.time||'99:99')));
+}
+/* 그중 아직 출석 안 한 것 */
+function pendingAtt(){return todayAtt().filter(e=>!(e.attend||{})[ME.id]);}
+function showAttGate(list){
+  const g=document.getElementById('attgate');
+  const today=iso(new Date());
+  const ico=e=>e.type==='party'?'🍻':'📅';
+  const meta=e=>`${e.time?e.time+' · ':''}${esc(e.place)||dl(e.start)}`;
+  const did=e=>!!(e.attend||{})[ME.id];
+
+  if(list.length===1){
+    const e=list[0];
+    g.innerHTML=`<div class="g-wrap">
+      <div class="agtop">${e.start===today?'오늘 일정이 있어요':dl(e.start)+' 일정이에요'}</div>
+      <div class="agicon">${ico(e)}</div>
+      <div class="agtitle">${esc(e.title)||'제목 없음'}</div>
+      <div class="agmeta">${meta(e)}</div>
+      <button class="agbtn" data-act="agYes" data-id="${e.id}">✋ 출석하기</button>
+      <button class="aglater" data-act="agNo" data-id="${e.id}">나중에 할게요</button>
+    </div>`;
+  }else{
+    const done=list.filter(did).length, left=list.length-done;
+    g.innerHTML=`<div class="g-wrap">
+      <div class="agtop">${done?`${left}개 남았어요`:`출석할 일정이 ${list.length}개 있어요`}</div>
+      <div class="aglist">
+        ${list.map(e=>`<div class="agcard ${did(e)?'okc':''}">
+          <div class="agci">${ico(e)}</div>
+          <div class="agcm"><b>${esc(e.title)||'제목 없음'}</b><span>${meta(e)}</span></div>
+          ${did(e)?`<span class="agcb okd">✅</span>`
+                  :`<button class="agcb" data-act="agYes" data-id="${e.id}">출석</button>`}
+        </div>`).join('')}
+      </div>
+      <button class="aglater" data-act="agNoAll">${done?'이대로 시작하기':'나중에 할게요'}</button>
+      ${done?'<div class="agfoot">출석한 건 이미 저장됐어요</div>':''}
+    </div>`;
+  }
+  g.classList.add('on');
+}
 function attSheet(e){
   const list=members(), at=e.attend||{};
   const on=list.filter(m=>at[m.id]), off=list.filter(m=>!at[m.id]);
@@ -967,7 +1060,9 @@ function attSheet(e){
       ${canWrite()?`<button class="tg ${at[m.id]?'att':'abs'}" data-act="attTog" data-id="${e.id}" data-mid="${m.id}">${at[m.id]?'출석':'미출석'}</button>`
       :`<span class="tagline ${at[m.id]?'t-live':'t-end'}">${at[m.id]?'출석':'미출석'}</span>`}
     </div>`).join('')||'<div class="empty" style="border:none;margin:0">참여자가 없어요</div>'}</div>
-  ${canWrite()&&off.length?`<button class="btn ghost small" style="margin-top:12px" data-act="attCopy" data-id="${e.id}">미출석자 명단 복사</button>`:''}`);
+  ${canWrite()?`<div class="btnrow" style="margin-top:12px">
+    <button class="btn ghost small" data-act="attCopyOn" data-id="${e.id}">📋 출석자 복사</button>
+    ${off.length?`<button class="btn ghost small" data-act="attCopy" data-id="${e.id}">미출석자 복사</button>`:''}</div>`:''}`);
 }
 function syncAttToRec(e){
   const rec=linkedRec(e);if(!rec)return;
@@ -1958,6 +2053,27 @@ document.addEventListener('click',async e=>{
   if(a==='attMode'){if(!gW())return;const e=DB.events.find(x=>x.id===b.dataset.id);
     e.att=b.dataset.v;saveDB();attSheet(e);renderQuiet();
     toast(b.dataset.v==='on'?'출석을 켰어요':'출석을 껐어요');return;}
+  if(a==='agYes'){
+    const e=DB.events.find(x=>x.id===b.dataset.id);if(!e)return;
+    e.attend=e.attend||{};e.attend[ME.id]=Date.now();
+    if(e.type==='party')syncAttToRec(e);
+    saveDB();
+    b.textContent=b.classList.contains('agcb')?'✅':'✅ 출석 완료!';
+    b.disabled=true;b.classList.add('okd');
+    setTimeout(()=>{
+      if(pendingAtt().length)showAttGate(todayAtt());
+      else{document.getElementById('attgate').classList.remove('on');render();}
+    },900);
+    return;}
+  if(a==='agNo'){skipAtt(b.dataset.id);
+    document.getElementById('attgate').classList.remove('on');return;}
+  if(a==='agNoAll'){pendingAtt().forEach(e=>skipAtt(e.id));
+    document.getElementById('attgate').classList.remove('on');return;}
+  if(a==='attCopyOn'){const e=DB.events.find(x=>x.id===b.dataset.id);
+    const at=e.attend||{};
+    const on=members().filter(m=>at[m.id]).sort((x,y)=>at[x.id]-at[y.id]);
+    if(!on.length)return toast('아직 출석한 사람이 없어요');
+    return copy(`[${e.title}] 출석 ${on.length}명\n${on.map(m=>m.name).join(', ')}`);}
   if(a==='attMe'){const e=DB.events.find(x=>x.id===b.dataset.id);
     e.attend=e.attend||{};
     if(e.attend[ME.id])delete e.attend[ME.id];else e.attend[ME.id]=Date.now();
@@ -2392,7 +2508,10 @@ render();
 cloudInit().then(()=>{
   if(!ME.club)showGate('welcome');
   else if(blocked())showGate('blocked');
-  else{splash();registerPush(true);}
+  else{
+    if(pendingAtt().length)showAttGate(todayAtt());else splash();
+    registerPush(true);
+  }
 });
 </script>
 </body>
