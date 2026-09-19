@@ -12,7 +12,7 @@ firebase.initializeApp({
 });
 firebase.messaging();
 
-const CACHE = 'scale-v3';
+const CACHE = 'scale-v4';
 const SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-urgent.png'];
 
 self.addEventListener('install', e => {
